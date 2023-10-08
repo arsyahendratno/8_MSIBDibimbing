@@ -1,3 +1,44 @@
+-- 1a.
+create table dim_user(
+	user_id int primary key,
+	name varchar,
+	email varchar,
+	gender varchar,
+	age int,
+	ads_source varchar
+);
+insert into dim_user(user_id,name,email,gender,age,ads_source)
+select 
+	u.id,
+	concat(first_name,' ',last_name) as nama,
+	email,
+	gender,
+	extract (year from register_date) - extract (year from dob) as umur,
+	concat(fa.ads_id, ia.ads_id) as ads
+from "user".users u
+left join social_media.facebook_ads fa on u.client_id = fa.id 
+left join social_media.instagram_ads ia on u.client_id = ia.id 
+
+
+-- 1b.
+CREATE TABLE dim_ads AS
+SELECT
+    ads_id,
+    device_type,
+    device_id,
+    timestamp
+FROM
+    social_media.facebook_ads
+UNION ALL
+SELECT
+    ads_id,
+    device_type,
+    device_id,
+    timestamp
+FROM
+    social_media.instagram_ads;
+
+    
 -- 2. Fact Table Creation
 -- a. Fact table named 'fact_user_performance'
 CREATE TABLE fact_user_performance (
@@ -58,3 +99,22 @@ JOIN (
     GROUP BY user_id
 ) AS ia ON u.id = ia.user_id
 GROUP BY u.id;
+
+
+2b.                                                                                                                                                CREATE TABLE fakta_iklan_kinerja AS
+SELECT
+    a.ads_id,
+    COUNT(DISTINCT fb.device_id) AS total_klik,
+    COUNT(DISTINCT CASE WHEN fb.device_type = 'Mobile' THEN fb.device_id ELSE NULL END) AS total_konversi_mobile,
+    COUNT(DISTINCT CASE WHEN fb.device_type = 'Desktop' THEN fb.device_id ELSE NULL END) AS total_konversi_desktop
+FROM facebook_ads AS fb
+GROUP BY a.ads_id;
+
+INSERT INTO fakta_iklan_kinerja (ads_id, total_klik, total_konversi_mobile, total_konversi_desktop)
+SELECT
+    a.ads_id,
+    COUNT(DISTINCT ig.device_id) AS total_klik,
+    COUNT(DISTINCT CASE WHEN ig.device_type = 'Mobile' THEN ig.device_id ELSE NULL END) AS total_konversi_mobile,
+    COUNT(DISTINCT CASE WHEN ig.device_type = 'Desktop' THEN ig.device_id ELSE NULL END) AS total_konversi_desktop
+FROM instagram_ads AS ig
+GROUP BY a.ads_id;
