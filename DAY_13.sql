@@ -1,26 +1,35 @@
--- 1a.
+--no 1 a
 create table dim_user(
-	user_id int primary key,
+	id serial primary key,
+	user_id int,
 	name varchar,
 	email varchar,
 	gender varchar,
 	age int,
-	ads_source varchar
+	ads_source varchar,
+	event_type varchar,
+	"timestamp" timestamp,
+	event_data json
 );
-insert into dim_user(user_id,name,email,gender,age,ads_source)
-select 
+
+insert into dim_user(user_id,name,email,gender,age,ads_source,event_type,"timestamp",event_data)
+select
 	u.id,
 	concat(first_name,' ',last_name) as nama,
 	email,
 	gender,
 	extract (year from register_date) - extract (year from dob) as umur,
-	concat(fa.ads_id, ia.ads_id) as ads
-from "user".users u
+	concat(fa.ads_id, ia.ads_id) as ads,
+	ue.event_type,
+	ue."timestamp",
+	ue.event_data 
+from "user".users u 
+left join "event"."User Event" ue on ue.user_id = u.id 
+left join "user".user_transactions ut on ut.user_id = u.id
 left join social_media.facebook_ads fa on u.client_id = fa.id 
-left join social_media.instagram_ads ia on u.client_id = ia.id 
+left join social_media.instagram_ads ia on u.client_id = ia.id
 
-
--- 1b.
+--no 1b
 CREATE TABLE dim_ads AS
 SELECT
     ads_id,
@@ -37,10 +46,8 @@ SELECT
     timestamp
 FROM
     social_media.instagram_ads;
-
     
--- 2. Fact Table Creation
--- a. Fact table named 'fact_user_performance'
+--no 2a
 CREATE TABLE fact_user_performance (
     user_id INT PRIMARY KEY,
     last_login TIMESTAMP,
@@ -48,11 +55,11 @@ CREATE TABLE fact_user_performance (
     total_transactions INT,
     total_ads_clicks INT,
     total_events INT,
-    engagement_score DECIMAL(10, 2),
+    engagement_score DECIMAL(10, 2)
 );
 -- Create a link between the fact table and the dimension table through a foreign key.
 ALTER TABLE fact_user_performance
-    ADD CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES users(id);
+    ADD CONSTRAINT fk_user_id FOREIGN KEY (user_id) REFERENCES "user".users(id);
 -- Populating the table with data.
 INSERT INTO fact_user_performance (user_id, last_login, last_activity, total_transactions, total_ads_clicks, total_events, engagement_score)
 SELECT
@@ -133,37 +140,75 @@ LEFT JOIN (
 ) AS ue ON u.id = ue.user_id
 GROUP BY u.id;
 
--- 2b.                                                                                                                                                CREATE TABLE fakta_iklan_kinerja AS
-SELECT
-    a.ads_id,
-    COUNT(DISTINCT fb.device_id) AS total_klik,
-    COUNT(DISTINCT CASE WHEN fb.device_type = 'Mobile' THEN fb.device_id ELSE NULL END) AS total_konversi_mobile,
-    COUNT(DISTINCT CASE WHEN fb.device_type = 'Desktop' THEN fb.device_id ELSE NULL END) AS total_konversi_desktop
-FROM facebook_ads AS fb
-GROUP BY a.ads_id;
-
-INSERT INTO fakta_iklan_kinerja (ads_id, total_klik, total_konversi_mobile, total_konversi_desktop)
-SELECT
-    a.ads_id,
-    COUNT(DISTINCT ig.device_id) AS total_klik,
-    COUNT(DISTINCT CASE WHEN ig.device_type = 'Mobile' THEN ig.device_id ELSE NULL END) AS total_konversi_mobile,
-    COUNT(DISTINCT CASE WHEN ig.device_type = 'Desktop' THEN ig.device_id ELSE NULL END) AS total_konversi_desktop
-FROM instagram_ads AS ig
-GROUP BY a.ads_id;
-
--- 3. Data Mart
--- 3a. fact_daily_event_performance
-CREATE TABLE fact_daily_event_performance (
-    event_date DATE PRIMARY KEY,
-    total_events INT,
-    total_users INT
+--no 2b
+CREATE TABLE fact_ads_performance (
+    ad_id VARCHAR(50) PRIMARY KEY,
+    total_clicks INT,
+    total_converted INT,
+    total_impressions INT,
+    click_through_rate DECIMAL(10, 2),
+    conversion_rate DECIMAL(10, 2)
 );
+
 -- Populate the table with data.
-INSERT INTO fact_daily_event_performance (event_date, total_events, total_users)
+INSERT INTO fact_ads_performance (ad_id, total_clicks, total_converted, total_impressions, click_through_rate, conversion_rate)
 SELECT
-    DATE(timestamp) AS event_date,
-    COUNT(*) AS total_events,
-    COUNT(DISTINCT user_id) AS total_users
-FROM "event"."User Event"
-WHERE timestamp >= 'start_date'::date AND timestamp <= 'end_date'::date
-GROUP BY event_date;
+    fa.ads_id AS ad_id,
+    COALESCE(fa.total_clicks, 0) AS total_clicks,
+    COALESCE(uc.total_converted_android, 0) + COALESCE(uc.total_converted_ios, 0) + COALESCE(uc.total_converted_desktop, 0) AS total_converted,
+    COALESCE(fa.total_impressions, 0) AS total_impressions,
+    CASE
+        WHEN COALESCE(fa.total_impressions, 0) > 0 THEN (COALESCE(fa.total_clicks, 0) / COALESCE(fa.total_impressions, 0)) * 100
+        ELSE 0
+    END AS click_through_rate,
+    CASE
+        WHEN COALESCE(fa.total_clicks, 0) > 0 THEN ((COALESCE(uc.total_converted_android, 0) + COALESCE(uc.total_converted_ios, 0) + COALESCE(uc.total_converted_desktop, 0)) / COALESCE(fa.total_clicks, 0)) * 100
+        ELSE 0
+    END AS conversion_rate
+FROM (
+    -- Combine data from Facebook Ads and Instagram Ads for total_clicks and total_impressions.
+    SELECT ads_id, SUM(total_clicks) AS total_clicks, SUM(total_impressions) AS total_impressions
+    FROM (
+        SELECT ads_id, SUM(total_clicks) AS total_clicks, SUM(total_impressions) AS total_impressions
+        FROM (
+            SELECT ads_id, SUM(1) AS total_clicks, 0 AS total_impressions
+            FROM social_media.facebook_ads
+            GROUP BY ads_id
+            UNION ALL
+            SELECT ads_id, 0 AS total_clicks, SUM(1) AS total_impressions
+            FROM social_media.instagram_ads
+            GROUP BY ads_id
+        ) AS combined_ads
+        GROUP BY ads_id
+    ) AS aggregated_ads
+    GROUP BY ads_id
+) AS fa
+LEFT JOIN (
+    -- Calculate total conversions for Android, IOS, and Desktop separately.
+    SELECT ads_id, 
+           SUM(CASE WHEN device_type = 'Android' THEN 1 ELSE 0 END) AS total_converted_android,
+           SUM(CASE WHEN device_type = 'IOS' THEN 1 ELSE 0 END) AS total_converted_ios,
+           SUM(CASE WHEN device_type = 'Desktop' THEN 1 ELSE 0 END) AS total_converted_desktop
+    FROM social_media.facebook_ads
+    GROUP BY ads_id
+) AS uc ON fa.ads_id = uc.ads_id::VARCHAR(50);
+
+--no 31
+create table fact_daily_event_performance(
+	id serial primary key,
+	event_date date,
+	event_type varchar,
+	total_events int,
+	event_data json
+)
+insert into fact_daily_event_performance(event_date,event_type,total_events,event_data)
+SELECT
+    DATE(du.timestamp) AS event_date,
+    du.event_type,
+    COUNT(du.event_type) AS total_events,	
+    json_agg(du.event_data) as event_data
+FROM public.fact_user_performance fup 
+LEFT JOIN dim_user du ON du.user_id = fup.user_id
+WHERE event_data IS NOT NULL AND event_type IS NOT NULL
+GROUP BY event_date, du.event_type
+order by event_date asc
