@@ -101,7 +101,7 @@ JOIN (
 GROUP BY u.id;
 
 
-2b.                                                                                                                                                CREATE TABLE fakta_iklan_kinerja AS
+-- 2b.                                                                                                                                                CREATE TABLE fakta_iklan_kinerja AS
 SELECT
     a.ads_id,
     COUNT(DISTINCT fb.device_id) AS total_klik,
@@ -118,3 +118,20 @@ SELECT
     COUNT(DISTINCT CASE WHEN ig.device_type = 'Desktop' THEN ig.device_id ELSE NULL END) AS total_konversi_desktop
 FROM instagram_ads AS ig
 GROUP BY a.ads_id;
+
+-- 3. Data Mart
+-- 3a. fact_daily_event_performance
+CREATE TABLE fact_daily_event_performance (
+    event_date DATE PRIMARY KEY,
+    total_events INT,
+    total_users INT
+);
+-- Populate the table with data.
+INSERT INTO fact_daily_event_performance (event_date, total_events, total_users)
+SELECT
+    DATE(event_timestamp) AS event_date,
+    COUNT(*) AS total_events,
+    COUNT(DISTINCT user_id) AS total_users
+FROM "event".events
+WHERE event_timestamp >= 'start_date' AND event_timestamp <= 'end_date'
+GROUP BY event_date;
