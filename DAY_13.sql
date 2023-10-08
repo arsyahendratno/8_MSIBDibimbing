@@ -135,3 +135,12 @@ CREATE TABLE fact_daily_event_performance (
     total_events INT,
     total_users INT
 );
+-- Populate the table with data.
+INSERT INTO fact_daily_event_performance (event_date, total_events, total_users)
+SELECT
+    DATE(timestamp) AS event_date,
+    COUNT(*) AS total_events,
+    COUNT(DISTINCT user_id) AS total_users
+FROM "event"."User Event"
+WHERE timestamp >= 'start_date'::date AND timestamp <= 'end_date'::date
+GROUP BY event_date;
