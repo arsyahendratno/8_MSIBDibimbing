@@ -57,17 +57,40 @@ ALTER TABLE fact_user_performance
 INSERT INTO fact_user_performance (user_id, last_login, last_activity, total_transactions, total_ads_clicks, total_events, engagement_score)
 SELECT
     u.id AS user_id,
-    -- Presuming that the register_date is automatically updated whenever the user attempts to log in, hence the last_login is calculated as the maximum registration date from the 'users' table.
-    MAX(u.register_date) AS last_login,
-    -- The last_activity is derived from the maximum timestamp from different event sources, namely registration, transactions, ad clicks, and user events.
-    MAX(COALESCE(u.register_date, ut.transaction_date, fa.timestamp, ia.timestamp, ue.timestamp)) AS last_activity,
+    MAX(
+        CASE
+            WHEN ue.event_type = 'login' THEN ue.timestamp -- Use the timestamp of the 'login' event.
+            ELSE u.register_date -- Use the registration date as fallback.
+        END
+    ) AS last_login,
+    -- The last_activity is determined from the maximum timestamp from different event sources, namely registration, transactions, ad clicks, and user events.
+    MAX(
+        GREATEST(
+            COALESCE(
+            	u.register_date,
+                ut.transaction_date,
+                fa.timestamp,
+                ia.timestamp,
+                ue.timestamp
+            ),
+            CASE
+                WHEN ue.event_type = 'NULL' THEN u.register_date
+                ELSE ue.timestamp
+            END
+        )
+    ) AS last_activity,
     COALESCE(SUM(ut.total_transactions), 0) AS total_transactions,
     COALESCE(SUM(fa.total_clicks), 0) + COALESCE(SUM(ia.total_clicks), 0) AS total_ads_clicks,
-    -- The engagement score is determined by calculating the mean of the user's activities.
+    --  The engagement score is determined by calculating the mean of the user's activities.
     -- total_transactions + total_ads_clicks + total_events / 3
     COALESCE(SUM(ue.total_events), 0) AS total_events,
     (
-        (COALESCE(SUM(ut.total_transactions), 0) + COALESCE(SUM(fa.total_clicks), 0) + COALESCE(SUM(ia.total_clicks), 0) + COALESCE(SUM(ue.total_events), 0)) / 3.0
+        (
+            COALESCE(SUM(ut.total_transactions), 0) +
+            COALESCE(SUM(fa.total_clicks), 0) +
+            COALESCE(SUM(ia.total_clicks), 0) +
+            COALESCE(SUM(ue.total_events), 0)
+        ) / 3.0
     ) AS engagement_score
 FROM "user".users u
 LEFT JOIN (
@@ -89,11 +112,6 @@ LEFT JOIN (
     GROUP BY user_id, timestamp
 ) AS fa ON u.client_id = fa.user_id
 LEFT JOIN (
-    SELECT user_id, timestamp, COUNT(*) AS total_events
-    FROM "event"."User Event" ue
-    GROUP BY user_id, timestamp
-) AS ue ON u.id = ue.user_id
-LEFT JOIN (
     SELECT user_id, MAX("timestamp") AS "timestamp", COUNT(*) AS total_clicks
     FROM (
         SELECT user_id, "timestamp" FROM social_media.facebook_ads fa
@@ -104,10 +122,15 @@ LEFT JOIN (
         JOIN "user".users u ON ia.id = u.client_id
         JOIN "user".user_transactions ut ON u.id = ut.user_id
         UNION ALL
-        SELECT user_id, "timestamp" FROM "event"."User Event" ue
+        SELECT user_id, "timestamp" FROM "event"."User Event" -- Reference 'User Event' directly from the 'event' schema.
     ) AS combined_events
     GROUP BY user_id
 ) AS ia ON u.client_id = ia.user_id
+LEFT JOIN (
+    SELECT user_id, event_type, timestamp, COUNT(*) AS total_events
+    FROM "event"."User Event" -- Reference 'User Event' directly from the 'event' schema.
+    GROUP BY user_id, event_type, timestamp
+) AS ue ON u.id = ue.user_id
 GROUP BY u.id;
 
 -- 2b.                                                                                                                                                CREATE TABLE fakta_iklan_kinerja AS
