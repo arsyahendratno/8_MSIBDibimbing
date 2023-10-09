@@ -202,3 +202,16 @@ LEFT JOIN dim_user du ON du.user_id = fup.user_id
 WHERE event_data IS NOT NULL AND event_type IS NOT NULL
 GROUP BY event_date, du.event_type
 order by event_date asc
+
+
+-- 3b.
+CREATE TABLE fact_weekly_ads_performance (
+    week_start_date DATE PRIMARY KEY,
+    ads_id VARCHAR(50),
+    week_end_date DATE,
+    total_clicks INT,
+    total_converted INT,
+    total_impressions INT,
+    click_through_rate DECIMAL(10, 2),
+    conversion_rate DECIMAL(10, 2)
+);
