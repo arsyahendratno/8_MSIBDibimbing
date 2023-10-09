@@ -106,18 +106,18 @@ LEFT JOIN (
     GROUP BY user_id, transaction_date
 ) ut ON u.id = ut.user_id
 LEFT JOIN (
-    SELECT user_id, timestamp, COUNT(*) AS total_clicks
+    SELECT combined_ads.id,combined_ads.timestamp, COUNT(*) AS total_clicks
     FROM (
-        SELECT user_id, "timestamp" FROM social_media.facebook_ads fa
+        SELECT fa.id,fa.timestamp
+        FROM social_media.facebook_ads fa
         JOIN "user".users u ON fa.id = u.client_id
-        JOIN "user".user_transactions ut ON u.id = ut.user_id
         UNION ALL
-        SELECT user_id, "timestamp" FROM social_media.instagram_ads ia
+        SELECT ia.id,ia.timestamp
+        FROM social_media.instagram_ads ia
         JOIN "user".users u ON ia.id = u.client_id
-        JOIN "user".user_transactions ut ON u.id = ut.user_id
-    ) AS combined_ads
-    GROUP BY user_id, timestamp
-) AS fa ON u.client_id = fa.user_id
+    ) combined_ads
+    GROUP BY combined_ads.id, combined_ads.timestamp
+) AS fa ON u.client_id = fa.id
 LEFT JOIN (
     SELECT user_id, MAX("timestamp") AS "timestamp", COUNT(*) AS total_clicks
     FROM (
