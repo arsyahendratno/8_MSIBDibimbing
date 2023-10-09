@@ -204,14 +204,31 @@ GROUP BY event_date, du.event_type
 order by event_date asc
 
 
--- 3b.
+
+
+--no 3b
+-- Create the fact_weekly_ads_performance table
 CREATE TABLE fact_weekly_ads_performance (
-    week_start_date DATE PRIMARY KEY,
-    ads_id VARCHAR(50),
-    week_end_date DATE,
+	ad_id serial primary key,
+    week_start_date DATE,
+    ads_id varchar,
+    device_type VARCHAR,
     total_clicks INT,
-    total_converted INT,
-    total_impressions INT,
-    click_through_rate DECIMAL(10, 2),
-    conversion_rate DECIMAL(10, 2)
+    total_impressions INT
 );
+
+INSERT INTO fact_weekly_ads_performance (week_start_date, ads_id, device_type, total_clicks, total_impressions)
+SELECT
+    DATE_TRUNC('week', ads.timestamp) AS week_start_date,
+    ads.ads_id,
+    ads.device_type,
+    COUNT(*) AS total_clicks,
+    COUNT(*) AS total_impressions
+FROM
+    (SELECT * FROM social_media.facebook_ads UNION ALL SELECT * FROM social_media.instagram_ads) AS ads
+left join
+	"user".users u on u.client_id = ads.id 
+LEFT JOIN
+    "event"."User Event" ue ON u.id  = ue.user_id
+GROUP BY
+    week_start_date, ads.ads_id, ads.device_type;
