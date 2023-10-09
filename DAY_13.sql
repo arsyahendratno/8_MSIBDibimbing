@@ -87,17 +87,17 @@ SELECT
         )
     ) AS last_activity,
     COALESCE(SUM(ut.total_transactions), 0) AS total_transactions,
-    COALESCE(SUM(fa.total_clicks), 0) + COALESCE(SUM(ia.total_clicks), 0) AS total_ads_clicks,
+    -- COALESCE(SUM(fa.total_clicks), 0) + COALESCE(SUM(ia.total_clicks), 0) AS total_ads_clicks,
     --  The engagement score is determined by calculating the mean of the user's activities.
     -- total_transactions + total_ads_clicks + total_events / 3
     COALESCE(SUM(ue.total_events), 0) AS total_events,
     (
         (
             COALESCE(SUM(ut.total_transactions), 0) +
-            COALESCE(SUM(fa.total_clicks), 0) +
-            COALESCE(SUM(ia.total_clicks), 0) +
+            -- COALESCE(SUM(fa.total_clicks), 0) +
+            -- COALESCE(SUM(ia.total_clicks), 0) +
             COALESCE(SUM(ue.total_events), 0)
-        ) / 3.0
+        ) / 2.0
     ) AS engagement_score
 FROM "user".users u
 LEFT JOIN (
