@@ -1,0 +1,29 @@
+version: '3'
+services:
+  web:
+    # image: python:3.8
+    # container_name: web_app
+    # command: python data_ingestion_script.py
+    #   - ./web_app:/code
+    # ports:
+    #   - "8000:5000"
+    # depends_on:
+    #   - database
+    build: .
+    container_name: web_app
+    volumes:
+      - ./data_ingestion_script.py:/app/data_ingestion_script.py
+    depends_on:
+      - database
+  database:
+    image: postgres:13
+    container_name: db
+    environment:
+      POSTGRES_DB: day15
+      POSTGRES_USER: docker8
+      POSTGRES_PASSWORD: kel8day15
+    ports:
+      - "5440:5432"
+    volumes:
+      - ./db_data:/var/lib/postgresql/data
+
