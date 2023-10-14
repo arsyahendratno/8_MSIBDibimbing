@@ -16,14 +16,16 @@ services:
     depends_on:
       - database
   database:
-    image: postgres:13
-    container_name: db
+    image: postgres:13-alpine
+    restart: always
+    container_name: database
     environment:
       POSTGRES_DB: day15
       POSTGRES_USER: docker8
       POSTGRES_PASSWORD: kel8day15
-    ports:
-      - "5440:5432"
     volumes:
       - ./db_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    
 

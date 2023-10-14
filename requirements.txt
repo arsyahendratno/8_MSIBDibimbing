@@ -1,4 +1,5 @@
 requests
-beautifulsoup
+bs4
 pandas
-json
+sqlalchemy
+psycopg2

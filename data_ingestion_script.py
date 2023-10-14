@@ -58,4 +58,32 @@ for country in countries:
 
 component_df = pd.DataFrame(countries_list)
 
-print(component_df)
+
+import psycopg2 # untuk connect ke database postgresql
+# Connect to the database
+host = '172.21.0.2'
+port = '5432'
+database = 'day15'
+username = 'docker8'
+password = 'kel8day15'
+
+# Create database connection
+connection = psycopg2.connect(host=host, port=port, database=database, user=username, password=password)
+
+
+#Make Table country
+query = 'CREATE TABLE IF NOT EXISTS public.country(country text, country_code text, latitude float, longitude float)'
+cursor = connection.cursor()
+cursor.execute(query)
+connection.commit()
+cursor.close()
+
+#Insert data country to database
+for index,row in component_df.iterrows():
+  query = f"INSERT INTO public.country(country, country_code, latitude, longitude) VALUES ('{row['country']}','{row['country_code']}',{row['latitude']},{row['longitude']})"
+  cursor = connection.cursor()
+  cursor.execute(query)
+  connection.commit()
+  cursor.close()
+
+
